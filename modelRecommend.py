@@ -7,7 +7,9 @@ def ModelBasedRecommend (ratings):
     Ratings = ratings.pivot(index = 'user_id', columns ='movie_id', values = 'rating').fillna(0)
 
     # Denormalizes the ratings
-    R = Ratings.as_matrix()
+    R = Ratings.apply(lambda x: (x - x.mean()) / x.std())
+
+    R = Ratings.to_numpy()
     user_ratings_mean = np.mean(R, axis = 1)
     Ratings_demeaned = R - user_ratings_mean.reshape(-1, 1)
 
@@ -25,6 +27,8 @@ def recommend_movies(predictions, userID, movies, original_ratings, num_recommen
     
     # Get and sort the user's predictions
     user_row_number = userID - 1 # User ID starts at 1, not 0
+    print(predictions)
+    print()
     sorted_user_predictions = predictions.iloc[user_row_number].sort_values(ascending=False) # User ID starts at 1
     
     # Get the user's data and merge in the movie information.
@@ -33,6 +37,8 @@ def recommend_movies(predictions, userID, movies, original_ratings, num_recommen
                      sort_values(['rating'], ascending=False)
                  )
 
+    print ('User {0} has already rated {1} movies.'.format(userID, user_full.shape[0]))
+    print ('Recommending highest {0} predicted ratings movies not already rated.'.format(num_recommendations))
     
     # Recommend the highest predicted rating movies that the user hasn't seen yet.
     recommendations = (movies[~movies['movie_id'].isin(user_full['movie_id'])].

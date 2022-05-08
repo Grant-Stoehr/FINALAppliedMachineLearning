@@ -18,11 +18,10 @@ movies = pd.read_csv('movies.csv', usecols=['movie_id', 'title', 'genres'])
 
 conn = sqlite3.connect('app.sqlite')
 cur = conn.cursor()
-cur.execute("CREATE TABLE IF NOT EXISTS movieSaves (user_id varchar(12), Name varChar(100), Movie_Watched varChar(350), Rating int, Genre varChar(100))")
+cur.execute("CREATE TABLE IF NOT EXISTS movieSaves (user_id varchar(12), Name varChar(100), Movie_Watched varChar(350), Rating int, Genre varChar(100)), flag BOOLEAN")
 conn.close()
 
 
-# GO AHEAD AND ADD THIS TO WHENEVER THE BUTTON IS CLICKED TO SEARCH FOR A MOVIE BASED ON MODELRECOMMENDATION -------------
 conn = sqlite3.connect('app.sqlite')
 cur = conn.cursor()
 query = cur.execute("SELECT user_id, Movie_Watched, Rating FROM movieSaves ORDER BY user_id ASC")
@@ -37,7 +36,6 @@ for user in results:
     rating_append = rating_append.append({'user_id': user[0], 'movie_id': movie_id, 'rating': user[2], 'timestamp': ts}, ignore_index=True)
 ratings = ratings.append(rating_append, ignore_index=True)
 conn.close()
-# END OF ADDITION -------------------------------------------------------------------------------------------------------
 
 #Create a text area
 st.subheader('Tell us about the moves you have watched!')
@@ -141,6 +139,34 @@ else:
 
 
 st.header('Would you like to see recommendations based on your movie viewing history?')
+st.subheader('Enter your name:')
+name = st.text_input('Name')
+user_id_for_recommendations = 0
 
-# preds = ModelBasedRecommend(ratings)
-# already_rated, predictions = recommend_movies(preds, 1310, movies, ratings, 20)
+#This is the button that will save the data to the database based on whether or not the user has ever accessed the database before
+if st.button('See History'):
+    if name != '':
+        conn = sqlite3.connect('app.sqlite')
+        cur = conn.cursor()
+        # Check if the user has a user_id
+        query = cur.execute("SELECT user_id FROM movieSaves WHERE Name= ?", (name,))
+        results = query.fetchall()
+        # If the user doesnt have an id, we are going to ask them to save some movies
+        if len(results) == 0:
+            st.write("It looks like you haven't got any movies saved yet. Please save some movies!")
+        else:
+            # If the user has an id, we use that id and add to the database
+            user_id_for_recommendations = int(results[0][0])
+        conn.close()
+    else:
+        st.write('Please fill out all the fields')
+
+if user_id_for_recommendations != 0:
+    preds = ModelBasedRecommend(ratings)
+    already_rated, predictions = recommend_movies(preds, user_id_for_recommendations, movies, ratings, 20)
+    print(already_rated)
+    print()
+    print()
+    print(predictions)
+else:
+    st.write("Make sure to refresh the page before you start searching!")
