@@ -1,7 +1,6 @@
 from cleaner import *
 from genreRecommend import *
 from modelRecommend import *
-from deepLearningRecommend import *
 
 import streamlit as st
 import sqlite3
@@ -182,15 +181,4 @@ if user_id_for_recommendations != 0:
     st.table(predictions)
 else:
     st.write("Make sure to refresh the page before you start searching!")
-
-
-
-# Create a second rating df that will be used for the deep learning model
-ratingsDeepLearning = pd.read_csv('ratings.csv', usecols=['user_id', 'movie_id', 'rating', 'timestamp'])
-ratingsDeepLearning.drop_duplicates(inplace=True)
-# Process ratings dataframe for Keras Deep Learning model
-ratingsDeepLearning['user_emb_id'] = ratingsDeepLearning['user_id'] - 1
-ratingsDeepLearning['movie_emb_id'] = ratingsDeepLearning['movie_id'] - 1
-max_userid = ratingsDeepLearning['user_id'].drop_duplicates().max()
-max_movieid = ratingsDeepLearning['movie_id'].drop_duplicates().max()
 
