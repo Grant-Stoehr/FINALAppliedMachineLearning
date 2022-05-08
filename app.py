@@ -6,36 +6,47 @@ import streamlit as st
 import sqlite3
 from sqlite3 import Error
 import time
+from csv import writer
 
 #ONE TIME USE COMMAND IN ORDER TO CLEAN THE DATA AND MOVE IT FORM .dat FILES
 #word = convertDat()
 #print(word)
 
-#Grabbing datasets and putting them into dataframes
-ratings = pd.read_csv('ratings.csv', usecols=['user_id', 'movie_id', 'rating', 'timestamp'])
+# Create the sqlite database that serves as the backend for the app
+conn = sqlite3.connect('app.sqlite')
+cur = conn.cursor()
+cur.execute("CREATE TABLE IF NOT EXISTS movieSaves (user_id varchar(12), Name varChar(100), Movie_Watched varChar(350), Rating int, Genre varChar(100), flag int)")
+conn.close()
+
+
+# I create these 2 dataframes first to avoid an error with ratings later on
 users = pd.read_csv('users.csv', usecols=['user_id', 'gender', 'zipcode', 'age_desc', 'occ_desc'])
 movies = pd.read_csv('movies.csv', usecols=['movie_id', 'title', 'genres'])
 
 conn = sqlite3.connect('app.sqlite')
 cur = conn.cursor()
-cur.execute("CREATE TABLE IF NOT EXISTS movieSaves (user_id varchar(12), Name varChar(100), Movie_Watched varChar(350), Rating int, Genre varChar(100)), flag BOOLEAN")
-conn.close()
-
-
-conn = sqlite3.connect('app.sqlite')
-cur = conn.cursor()
-query = cur.execute("SELECT user_id, Movie_Watched, Rating FROM movieSaves ORDER BY user_id ASC")
+query = cur.execute("SELECT user_id, Movie_Watched, Rating FROM movieSaves WHERE flag = 0 ORDER BY user_id ASC")
 results = query.fetchall()
 print(results)
+
+for user in results:
+    movie_id = movies.loc[movies.title == user[1]].movie_id.values[0]
+    ts = int(time.time())
+    cur.execute('UPDATE movieSaves SET flag = 1 WHERE user_id = ? AND Movie_Watched = ?', (user[0], user[1]))
+    with open('ratings.csv', 'a') as csvfile:
+        writer_obj = [user[0], movie_id, user[2], ts]
+        writer_object = writer(csvfile)
+        writer_object.writerow([])
+        writer_object.writerow(writer_obj)
+        csvfile.close()
+    conn.commit()
+
 conn.close()
 
-rating_append = pd.DataFrame(columns=['user_id', 'movie_id', 'rating', 'timestamp'])
-for user in results:
-    movie_id = movies.loc[movies.title == user[1], 'movie_id']
-    ts = int(time.time())
-    rating_append = rating_append.append({'user_id': user[0], 'movie_id': movie_id, 'rating': user[2], 'timestamp': ts}, ignore_index=True)
-ratings = ratings.append(rating_append, ignore_index=True)
-conn.close()
+#Grabbing datasets and putting them into dataframes
+ratings = pd.read_csv('ratings.csv', usecols=['user_id', 'movie_id', 'rating', 'timestamp'])
+ratings.drop_duplicates(inplace=True)
+
 
 #Create a text area
 st.subheader('Tell us about the moves you have watched!')
@@ -60,18 +71,19 @@ if st.button('Submit'):
             if (results != []):
                 # If there are ids in the database, then we create a new id by adding 1 to the last id in the database
                 user_id = int(results[0][0]) + 1
-                cur.execute("INSERT INTO movieSaves (user_id, Name, Movie_Watched, Rating, Genre) VALUES (?, ?, ?, ?, ?)", (user_id, name, movie, rating, genre))
+                cur.execute("INSERT INTO movieSaves (user_id, Name, Movie_Watched, Rating, Genre, flag) VALUES (?, ?, ?, ?, ?, 0)", (user_id, name, movie, rating, genre))
                 conn.commit()
             else:
                 # If there are no ids in the database, then we create a new id by adding 1 to the last id in the users df
                 user_id = str(users.user_id.max() + 1)
-                cur.execute("INSERT INTO movieSaves (user_id, Name, Movie_Watched, Rating, Genre) VALUES (?, ?, ?, ?, ?)", (user_id, name, movie, rating, genre))
+                print(user_id)
+                cur.execute("INSERT INTO movieSaves (user_id, Name, Movie_Watched, Rating, Genre, flag) VALUES (?, ?, ?, ?, ?, 0)", (user_id, name, movie, rating, genre))
                 conn.commit()
         else:
             # If the user has an id, we use that id and add to the database
             user_id = int(results[0][0])
             # Add the user to the database
-            cur.execute("INSERT INTO movieSaves (user_id, Name, Movie_Watched, Rating, Genre) VALUES (?, ?, ?, ?, ?)", (user_id, name, movie, rating, genre))
+            cur.execute("INSERT INTO movieSaves (user_id, Name, Movie_Watched, Rating, Genre, flag) VALUES (?, ?, ?, ?, ?, 0)", (user_id, name, movie, rating, genre))
             conn.commit()
         conn.close()
     else:
@@ -140,16 +152,16 @@ else:
 
 st.header('Would you like to see recommendations based on your movie viewing history?')
 st.subheader('Enter your name:')
-name = st.text_input('Name')
+fullName = st.text_input('Your Name')
 user_id_for_recommendations = 0
 
 #This is the button that will save the data to the database based on whether or not the user has ever accessed the database before
 if st.button('See History'):
-    if name != '':
+    if fullName != '':
         conn = sqlite3.connect('app.sqlite')
         cur = conn.cursor()
         # Check if the user has a user_id
-        query = cur.execute("SELECT user_id FROM movieSaves WHERE Name= ?", (name,))
+        query = cur.execute("SELECT user_id FROM movieSaves WHERE Name= ?", (fullName,))
         results = query.fetchall()
         # If the user doesnt have an id, we are going to ask them to save some movies
         if len(results) == 0:
@@ -164,9 +176,10 @@ if st.button('See History'):
 if user_id_for_recommendations != 0:
     preds = ModelBasedRecommend(ratings)
     already_rated, predictions = recommend_movies(preds, user_id_for_recommendations, movies, ratings, 20)
-    print(already_rated)
-    print()
-    print()
-    print(predictions)
+    st.write("Based on the movies you like, we recommend:")
+    st.subheader('Recommendations:')
+    st.table(predictions)
 else:
     st.write("Make sure to refresh the page before you start searching!")
+
+
